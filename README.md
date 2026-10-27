@@ -1,40 +1,72 @@
-# Soldered NAZIV PROIZVODA Component
+# Soldered BMP180 Temperature and Pressure Sensor Component
 
-| ![Product name](https://upload.wikimedia.org/wikipedia/commons/8/8f/Example_image.svg) |
-| :------------------------------------------------------------------------------------: |
-|                      [NAZIV PROIZVODA](https://www.solde.red/SKU)                      |
+| ![Pressure & temperature sensor BMP180 breakout](https://soldered.com/cdn/shop/files/333060_featured-photo_70581e_3ec34161-1c04-4f2b-b780-f5809f582bcf.jpg) |
+| :---: |
+| [Pressure & temperature sensor BMP180 breakout](https://www.solde.red/333060) |
 
-OPIS PROIZVODA + LINK NA [Qwiic ecosystem](https://soldered.com/collections/qwiic-ecosystem).
+The BMP180 is a Bosch barometric pressure and temperature sensor: 300 to 1100 hPa with 0.01 hPa resolution, and temperature with 0.1 °C resolution. Since pressure falls with height, it can also estimate altitude. The board uses I2C at the fixed address 0x77 and connects with an easyC/Qwiic cable, see the [Qwiic ecosystem](https://soldered.com/collections/qwiic-ecosystem).
 
-### Using the template
+### Installation
 
-Before publishing a new component make sure to replace:
+Add it to your project with the component manager:
 
-- `NAZIV PROIZVODA`, `OPIS PROIZVODA`, product image, SKU link, and the "Original source" line in this README
-- `version`, `description`, `url` in `idf_component.yml`
-- `components:` name and `namespace:` in `.github/workflows/upload_component.yml`
-- filenames in `src/` and `include/` plus matching `SRCS` and `INCLUDE_DIRS` in `CMakeLists.txt` and `#include` in the `.c` file
-- dependency key in `examples/.../idf_component.yml` (path stays `../../..`)
-- `@file`, `@brief`, `@param`, `@return` Doxygen comments in `include/*.h`, `src/*.c`, and `examples/basic/main/main.c` to describe the real API
+```bash
+idf.py add-dependency "solderedelectronics/soldered-bmp180-esp-idf-component"
+```
 
-Also make sure to add examples.
+Or clone this repository into your project's `components/` folder.
 
-Run `./format.sh` before committing to auto-format `src/`, `include/`, and the example against the project's astyle rules (`.astyle_rules.yml`). CI runs the same check on every push/PR via `.github/workflows/format_check.yml` and fails on unformatted code.
+### Usage
 
-For uploading to Registry you need to register a trusted publisher under a component. To make the release to the registry you must bump `version` in `idf_component.yml` to `X.Y.Z`, push that commit, and confirm Format Check + Build Examples both pass on it (Actions tab) before tagging. Only once both are green: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+The I2C bus belongs to your application, not to the driver, so that other Qwiic devices can share it. Create the bus first, then hand it over:
 
-**Remove this section of README after everything is done!**
+```c
+#include "driver/i2c_master.h"
+#include "soldered_bmp180.h"
+
+i2c_master_bus_config_t bus_cfg = {
+    .i2c_port = I2C_NUM_0,
+    .sda_io_num = GPIO_NUM_21,
+    .scl_io_num = GPIO_NUM_22,
+    .clk_source = I2C_CLK_SRC_DEFAULT,
+    .glitch_ignore_cnt = 7,
+    .flags.enable_internal_pullup = true,
+};
+i2c_master_bus_handle_t bus;
+ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus));
+
+bmp180_t sensor;
+ESP_ERROR_CHECK(soldered_bmp180_init(&sensor, bus, 3)); // pressure oversampling 0..3
+
+float temperature, pressure;
+if (soldered_bmp180_read(&sensor, &temperature, &pressure) == ESP_OK) {
+    printf("%.1f degC, %.2f hPa\n", temperature, pressure);
+}
+```
+
+`soldered_bmp180_sealevel()` converts the absolute pressure to sea-level pressure for a known altitude, and `soldered_bmp180_altitude()` turns a pressure and a reference pressure into an altitude.
+
+### Examples
+
+- **basic_readings** - reads temperature and pressure every 5 s and prints the sea-level pressure and altitude
+
+```bash
+cd examples/basic_readings
+idf.py set-target esp32
+idf.py build flash monitor
+```
 
 ### Repository Contents
 
 - **/src** - source files (.c)
 - **/include** - header files (.h)
 - **/examples** - examples for using the library
+- **/test** - host-side test of the compensation math
 - **_other_** - idf_component.yml manifest file for ESP Component Registry
 
 ### Hardware design
 
-You can find hardware design for this board in _NAZIV PROIZVODA_ hardware repository.
+You can find hardware design for this board in Pressure & temperature sensor BMP180 breakout hardware repository.
 
 ### Documentation
 
@@ -52,7 +84,7 @@ At Soldered, we design and manufacture a wide selection of electronic products t
 
 ### Original source
 
-This library is possible thanks to original [arduino-mcp23017](https://github.com/blemasle/arduino-mcp23017) library. Thank you, blemasle.
+The compensation math follows the integer algorithm in the Bosch BMP180 datasheet (BST-BMP180-DS000, section 3.5).
 
 ### Open-source license
 
